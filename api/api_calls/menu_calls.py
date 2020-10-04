@@ -1,6 +1,7 @@
 from flask import Flask, Blueprint, request, jsonify
 from flask_api import status
 from aws_clients import restaurantS3Bucket, s3Client, s3Resource, MenuDatabase
+from decimal import Decimal
 import os
 
 # Define blueprint for Flask
@@ -10,7 +11,8 @@ def isCostInDollars(itemCost, validCurrencies="$"):
     return any(c in itemCost for c in validCurrencies)
 
 def addItemToMenu(itemName, itemCost):
-    cost = itemCost.replace('$', '')
+    costString = itemCost.replace('$', '')
+    cost = Decimal(costString)
 
     response = MenuDatabase.put_item(
         Item = {
@@ -67,5 +69,50 @@ def add_to_menu():
 
     if 'file' in request.files:
         response['image_database_status'] = updateImageInS3(itemName, request.files['file'])
+
+    return response
+
+@menu_calls.route('/menu/status', methods=['PUT'])
+def update_item_status():
+    requestData = request.form
+    response = {}
+
+    # Check if the body has the item and status
+    if not requestData or 'item' not in requestData or 'status' not in requestData:
+        response["error"] = 'Include item and status attributes in the request'
+        return jsonify(response), status.HTTP_400_BAD_REQUEST
+
+    itemName = requestData['item']
+    newStatus = requestData['status']
+
+    if newStatus not in ['available', 'not available']:
+        response["error"] = "Invalid status. Valid status are 'available', and 'not available'"
+        return jsonify(response), status.HTTP_400_BAD_REQUEST
+
+    # Get the current item from DynamoDB
+    results = MenuDatabase.get_item(
+        Key = {'item': itemName}
+    )
+
+    if 'Item' not in results:
+        response["error"] = "The item '" + itemName + "' doesn't exist in the menu"
+        return jsonify(response), status.HTTP_400_BAD_REQUEST
+
+    oldStatus = results['Item']['status']
+
+    response['item'] = itemName
+
+    if oldStatus == newStatus:
+        response['database_status'] = "Status is already set as '" + newStatus + "'. No further change"
+        return response
+
+    MenuDatabase.update_item(
+        Key={'item': itemName},
+        UpdateExpression ="SET #s = :newStatus",                   
+        ExpressionAttributeValues={':newStatus': newStatus},
+        ExpressionAttributeNames={"#s": "status"}
+    )
+
+    response['database_status'] = "Successfuly updated the status from '" + oldStatus + "' to '" + newStatus + "'"
 
     return response
