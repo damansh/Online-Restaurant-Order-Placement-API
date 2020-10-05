@@ -1,6 +1,7 @@
 from flask import Flask, Blueprint, request, jsonify
 from flask_api import status
 from aws_clients import restaurantS3Bucket, s3Client, s3Resource, MenuDatabase
+from boto3.dynamodb.conditions import Attr
 from decimal import Decimal
 import os
 
@@ -69,6 +70,51 @@ def add_to_menu():
 
     if 'file' in request.files:
         response['image_database_status'] = updateImageInS3(itemName, request.files['file'])
+
+    return response
+
+# Populate the API response with the image URL
+def populate_response(responseDDB, response):
+    response["menu_items"] = []
+    for item in responseDDB['Items']:
+        menuItem = {}
+        
+        if item['status'] == 'available':
+            menuItem['item'] = item['item']
+            menuItem['item-cost'] = '${:,.2f}'.format(item['cost'])
+
+            results = s3Client.list_objects(Bucket=restaurantS3Bucket, Prefix=item['item'])
+            fileName = results['Contents'][0]['Key']
+
+            menuItem['item-image-url'] = "https://%s.s3.amazonaws.com/%s" % (restaurantS3Bucket, fileName)
+            
+            response["menu_items"].append(menuItem)
+
+def get_all_items(response):
+    responseDDB = MenuDatabase.scan()
+
+    populate_response(responseDDB, response)
+
+def get_search_item(searchItem, response):
+    responseDDB = MenuDatabase.scan(
+        FilterExpression = Attr('item').contains(searchItem)
+    )
+    print(responseDDB)
+    if not responseDDB['Items']:
+        response['error'] = "There is no menu item containing the search keyword '" + searchItem + "'"
+    else:
+        populate_response(responseDDB, response)
+
+@menu_calls.route('/menu', methods=['GET'])
+def get_menu():
+    requestData = request.form
+    response = {}
+
+    if 'item' in requestData:
+        searchItem = requestData['item']
+        get_search_item(searchItem, response)
+    else:
+        get_all_items(response)
 
     return response
 
