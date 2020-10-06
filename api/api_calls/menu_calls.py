@@ -30,7 +30,7 @@ def updateImageInS3(imageName, uploadedFile):
     newFileName = imageName + fileExtension
 
     uploadedFile.seek(0)
-    s3Client.upload_fileobj(uploadedFile, restaurantS3Bucket, newFileName)            
+    s3Client.upload_fileobj(uploadedFile, restaurantS3Bucket, newFileName, ExtraArgs={'ACL':'public-read'})            
 
     s3Resource.Object(restaurantS3Bucket, newFileName).wait_until_exists()
 
