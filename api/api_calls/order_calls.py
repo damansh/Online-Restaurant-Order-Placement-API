@@ -139,3 +139,39 @@ def get_order():
         get_all_orders(response)
     print(response)
     return response
+
+@order_calls.route('/order', methods=['DELETE'])
+def delete_order():
+    requestData = request.form
+    response = {}
+
+    # Check if the body has the item and cost
+    if not requestData or 'order-id' not in requestData:
+        response["error"] = 'Include the order-id of the order to delete'
+        return jsonify(response), status.HTTP_400_BAD_REQUEST
+    
+    orderId = requestData['order-id']
+
+    responseDDB = OrderDatabase.query(
+        KeyConditionExpression = Key('order_id').eq(orderId)
+    )
+
+    if not responseDDB['Items']:
+        response["error"] = "Order-id '" + orderId + "' is invalid."
+        return jsonify(response), status.HTTP_400_BAD_REQUEST
+    
+    currentOrder = responseDDB['Items'][0]
+
+    if currentOrder['status'] != "received":
+        response["error"] = "The status of the order is currently '" + currentOrder['status'] + "'. Unable to cancel the order"
+        return jsonify(response), status.HTTP_400_BAD_REQUEST
+
+    responseDDB = OrderDatabase.delete_item(
+        Key = {
+            "order_id": orderId
+        }
+    )
+
+    response['message'] = "Successfully deleted order with the order-id '" + orderId + "'"
+
+    return response
