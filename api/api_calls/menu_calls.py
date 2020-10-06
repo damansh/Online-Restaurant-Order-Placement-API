@@ -85,6 +85,7 @@ def populate_response(responseDDB, response):
 
             results = s3Client.list_objects(Bucket=restaurantS3Bucket, Prefix=item['item'])
             fileName = results['Contents'][0]['Key']
+            fileName.replace(" ", "+")
 
             menuItem['item-image-url'] = "https://%s.s3.amazonaws.com/%s" % (restaurantS3Bucket, fileName)
             
