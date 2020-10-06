@@ -1,7 +1,7 @@
 from flask import Flask, Blueprint, request, jsonify
 from flask_api import status
 from aws_clients import restaurantS3Bucket, s3Client, s3Resource, MenuDatabase
-from boto3.dynamodb.conditions import Attr
+from boto3.dynamodb.conditions import Attr, Key
 from decimal import Decimal
 import os
 
@@ -159,5 +159,46 @@ def update_item_status():
     )
 
     response['database_status'] = "Successfuly updated the status from '" + oldStatus + "' to '" + newStatus + "'"
+
+    return response
+
+@menu_calls.route('/menu', methods=['DELETE'])
+def delete_item():
+    requestData = request.form
+    response = {}
+
+    # Check if the body has the item and cost
+    if not requestData or 'item' not in requestData:
+        response["error"] = 'Include the item to delete in the request'
+        return jsonify(response), status.HTTP_400_BAD_REQUEST
+    
+    menuItem = requestData['item']
+
+    responseDDB = MenuDatabase.query(
+        KeyConditionExpression = Key('item').eq(menuItem)
+    )
+
+    if not responseDDB['Items']:
+        response["error"] = "There is no item in the menu with the name '" + menuItem + "'"
+        return jsonify(response), status.HTTP_400_BAD_REQUEST
+    elif len(responseDDB['Items']) > 1:
+        response["error"] = "There are multiple menu items with the name '" + menuItem + "'"
+        return jsonify(response), status.HTTP_400_BAD_REQUEST
+
+    responseDDB = MenuDatabase.delete_item(
+        Key = {
+            "item": menuItem
+        }
+    )
+
+    results = s3Client.list_objects(Bucket=restaurantS3Bucket, Prefix=menuItem)
+    fileName = results['Contents'][0]['Key']
+
+    responseS3 = s3Client.delete_object(
+        Bucket = restaurantS3Bucket,
+        Key = fileName
+    )
+
+    response['message'] = "Successfully deleted menu item with the name '" + menuItem + "'"
 
     return response
