@@ -25,6 +25,7 @@ def place_order():
     finalPrice = 0
     for food in foodToOrder:
         foodItem, quantity = food.split(",")
+        quantity = int(quantity)
 
         responseDDB = MenuDatabase.scan(
             FilterExpression = Attr('item').contains(foodItem) & Attr('status').eq('available')
@@ -43,8 +44,8 @@ def place_order():
 
         orderedItem = {}
         orderedItem['item'] = menuItem[0]['item']
-        orderedItem['quantity'] = quantity
-        orderedItem['cost'] = '${:,.2f}'.format(quantity * menuItem[0]['cost'])
+        orderedItem['quantity'] = str(quantity)
+        orderedItem['cost'] = '${:,.2f}'.format(quantity * float(menuItem[0]['cost']))
         
         finalPrice += quantity * menuItem[0]['cost']
         orderedItems.append(orderedItem)
@@ -57,7 +58,7 @@ def place_order():
         Item = {
             'order_id': response['order_id'],
             'items': orderedItems,
-            'final_price': finalPrice,
+            'final_price': response['final_price'],
             'status': 'received'
         }
     )
@@ -106,4 +107,35 @@ def modify_order_status():
 
     response['message'] = "The status of order '" + orderId + "' is now set to '" + newStatus + "'"
 
+    return response
+
+# Populate the API response
+def populate_response(responseDDB, response):
+    response["orders"] = [order for order in responseDDB['Items']]
+
+def get_all_orders(response):
+    responseDDB = OrderDatabase.scan()
+
+    populate_response(responseDDB, response)
+
+def get_specific_order(orderid, response):
+    responseDDB = OrderDatabase.scan(
+        FilterExpression = Attr('order-id').contains(orderid)
+    )
+    if not responseDDB['Items']:
+        response['error'] = "There is no order with the order-id '" + orderid + "'"
+    else:
+        populate_response(responseDDB, response)
+
+@order_calls.route('/order', methods=['GET'])
+def get_order():
+    requestData = request.form
+    response = {}
+
+    if 'order-id' in requestData:
+        orderid = requestData['order-id']
+        get_specific_order(orderid, response)
+    else:
+        get_all_orders(response)
+    print(response)
     return response

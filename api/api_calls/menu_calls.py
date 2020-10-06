@@ -73,7 +73,7 @@ def add_to_menu():
 
     return response
 
-# Populate the API response with the image URL
+# Populate the API response
 def populate_response(responseDDB, response):
     response["menu_items"] = []
     for item in responseDDB['Items']:
@@ -99,7 +99,6 @@ def get_search_item(searchItem, response):
     responseDDB = MenuDatabase.scan(
         FilterExpression = Attr('item').contains(searchItem)
     )
-    print(responseDDB)
     if not responseDDB['Items']:
         response['error'] = "There is no menu item containing the search keyword '" + searchItem + "'"
     else:
