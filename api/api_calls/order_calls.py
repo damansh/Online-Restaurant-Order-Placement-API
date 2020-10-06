@@ -1,7 +1,7 @@
 from flask import Flask, Blueprint, request, jsonify
 from flask_api import status
 from aws_clients import restaurantS3Bucket, s3Client, s3Resource, OrderDatabase, MenuDatabase
-from boto3.dynamodb.conditions import Attr
+from boto3.dynamodb.conditions import Attr, Key
 from decimal import Decimal
 import os
 import uuid
@@ -25,7 +25,6 @@ def place_order():
     finalPrice = 0
     for food in foodToOrder:
         foodItem, quantity = food.split(",")
-        quantity = int(quantity)
 
         responseDDB = MenuDatabase.scan(
             FilterExpression = Attr('item').contains(foodItem) & Attr('status').eq('available')
@@ -62,5 +61,49 @@ def place_order():
             'status': 'received'
         }
     )
+
+    return response
+
+@order_calls.route('/order/status', methods=['PUT'])
+def modify_order_status():
+    requestData = request.form
+    response = {}
+
+    # Check if the body has the item and cost
+    if not requestData or 'order-id' not in requestData or 'newStatus' not in requestData:
+        response["error"] = 'Include the order-id and the newStatus of the order'
+        return jsonify(response), status.HTTP_400_BAD_REQUEST
+    
+    newStatus = requestData['newStatus']
+    orderId = requestData['order-id']
+
+    validStatuses = ['received', 'in progress', 'ready']
+
+    if newStatus not in ['received', 'in progress', 'ready']:
+        response["error"] = "Status '" + newStatus + "' is invalid. Valid statuses: " + ', '.join(validStatuses)
+        return jsonify(response), status.HTTP_400_BAD_REQUEST
+
+    responseDDB = OrderDatabase.query(
+        KeyConditionExpression = Key('order_id').eq(orderId)
+    )
+
+    if not responseDDB['Items']:
+        response["error"] = "Order-id '" + orderId + "' is invalid."
+        return jsonify(response), status.HTTP_400_BAD_REQUEST
+    
+    currentOrder = responseDDB['Items'][0]
+
+    if currentOrder['status'] == newStatus:
+        response["message"] = "The status of order '" + orderId + "' is already set to '" + newStatus + "'"
+        return jsonify(response)
+
+    OrderDatabase.update_item(
+        Key={'order_id': orderId},
+        UpdateExpression ="SET #s = :newStatus",                   
+        ExpressionAttributeValues={':newStatus': newStatus},
+        ExpressionAttributeNames={"#s": "status"}
+    )
+
+    response['message'] = "The status of order '" + orderId + "' is now set to '" + newStatus + "'"
 
     return response
