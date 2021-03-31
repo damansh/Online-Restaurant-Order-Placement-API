@@ -1,5 +1,5 @@
-# Restaurant REST API Hosted on AWS
-A basic restaurant REST API that allows customers to order items from a menu and allows a restaurant to update their menu and view orders. The REST API is hosted on AWS Elastic Beanstalk here: http://daman-rbc-restaurant-api.us-east-1.elasticbeanstalk.com
+# Online Restaurant Order Placement API (Hosted on AWS)
+A basic restaurant REST API that allows customers to order items from a menu and allows a restaurant to update their menu and view orders. The API is hosted on AWS Elastic Beanstalk here: http://daman-rbc-restaurant-api.us-east-1.elasticbeanstalk.com
 
 The REST API uses AWS DynamoDB, AWS S3, and Flask:
 - DynamoDB: Created two tables that store menu and order information
